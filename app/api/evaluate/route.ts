@@ -221,41 +221,33 @@ export async function POST(req: Request) {
             }
 
             console.debug("[evaluate] pdfModule loaded. Type:", typeof pdfModule)
-            console.debug("[evaluate] Keys:", Object.keys(pdfModule))
-
-            // 2. UNWRAP LOGIC (The Fix)
-            // Next.js sometimes wraps CJS modules in { default: ... }
-            // And sometimes double wraps { default: { default: ... } }
-            let parseFunc = pdfModule.default || pdfModule
             
-            if (typeof parseFunc !== 'function') {
-              // Check for double wrapping
-              if (parseFunc.default && typeof parseFunc.default === 'function') {
-                console.debug("[evaluate] Found function in .default.default")
-                parseFunc = parseFunc.default
-              } else {
-                console.error("[evaluate] CRITICAL: PDF Parser is not a function. Structure:", parseFunc)
-                // One final desperate check: is the module ITSELF the function?
-                if (typeof pdfModule === 'function') {
-                  parseFunc = pdfModule
-                }
-              }
-            }
-
-            // 3. Final Validation
-            if (typeof parseFunc !== 'function') {
-              throw new Error(`PDF Parser failed to load. Keys found: ${Object.keys(pdfModule).join(", ")}`)
+            // 2. Get the PDFParse class
+            // The module exports PDFParse as a class (constructor)
+            const PDFParse = pdfModule.PDFParse || pdfModule.default
+            
+            if (typeof PDFParse !== 'function') {
+              throw new Error(`PDFParse class not found. Available keys: ${Object.keys(pdfModule).join(", ")}`)
             }
             
-            // 4. Execute
-            const data = await parseFunc(buffer)
-            cvContent = data.text || ""
+            console.debug("[evaluate] PDFParse class found, instantiating...")
+            
+            // 3. Create instance and parse
+            const parser = new PDFParse({ data: buffer })
+            console.debug("[evaluate] PDFParse instance created, calling getText()...")
+            
+            const textResult = await parser.getText()
+            cvContent = textResult.text || ""
+            
+            // Clean up
+            await parser.destroy()
             
             console.debug("[evaluate] PDF parsed successfully")
             console.debug("[evaluate] extracted text length:", cvContent.length, "characters")
             console.debug("[evaluate] first 200 chars:", cvContent.substring(0, 200))
           } catch (pdfError: any) {
             console.error("[evaluate] PDF parsing failed:", pdfError.message)
+            console.error("[evaluate] error stack:", pdfError.stack)
             // Fallback: ask user to use DOCX instead
             return Response.json(
               { error: "PDF parsing failed. Please try uploading a .docx file instead." },
