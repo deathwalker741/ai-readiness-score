@@ -340,8 +340,8 @@ export async function POST(req: Request) {
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY)
       console.debug("[evaluate] GoogleGenerativeAI instance created")
       
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
-      console.debug("[evaluate] model selected: gemini-1.5-flash")
+      const model = genAI.getGenerativeModel({ model: "gemini-1.5-pro" })
+      console.debug("[evaluate] model selected: gemini-1.5-pro")
       
       // Build a simpler prompt first to test
       const testPrompt = `${systemPrompt}\n\n---CV START---\n${cvContent}\n---CV END---\n\nRespond with valid JSON only, no markdown.`
