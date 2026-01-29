@@ -1,6 +1,9 @@
 import { z } from "zod"
 import mammoth from "mammoth"
 
+// Explicit Node.js runtime for Vercel compatibility with pdf-parse
+export const runtime = "nodejs"
+
 // Get API key from environment variables (set in .env.local for local development)
 const GEMINI_API_KEY = process.env.AI_GATEWAY_API_KEY || process.env.GOOGLE_API_KEY || ""
 
@@ -209,38 +212,15 @@ export async function POST(req: Request) {
           console.debug("[evaluate] buffer size for PDF:", buffer.length, "bytes")
           
           try {
-            // 1. Load the library
-            let pdfModule: any
-            try {
-              // Use standard require, relying on serverExternalPackages in next.config
-              const req = eval('require')
-              pdfModule = req("pdf-parse")
-            } catch (e) {
-              // Fallback for some environments
-              pdfModule = await import("pdf-parse")
-            }
-
-            console.debug("[evaluate] pdfModule loaded. Type:", typeof pdfModule)
+            // Import pdf-parse (v1.1.1 is Node.js safe)
+            // Standard CommonJS import - pdf-parse v1.1.1 exports function directly
+            const pdfParse = (await import("pdf-parse")).default as (buffer: Buffer) => Promise<{text: string}>
             
-            // 2. Get the PDFParse class
-            // The module exports PDFParse as a class (constructor)
-            const PDFParse = pdfModule.PDFParse || pdfModule.default
+            console.debug("[evaluate] pdf-parse imported successfully")
             
-            if (typeof PDFParse !== 'function') {
-              throw new Error(`PDFParse class not found. Available keys: ${Object.keys(pdfModule).join(", ")}`)
-            }
-            
-            console.debug("[evaluate] PDFParse class found, instantiating...")
-            
-            // 3. Create instance and parse
-            const parser = new PDFParse({ data: buffer })
-            console.debug("[evaluate] PDFParse instance created, calling getText()...")
-            
-            const textResult = await parser.getText()
-            cvContent = textResult.text || ""
-            
-            // Clean up
-            await parser.destroy()
+            // Parse the PDF buffer - pdfParse(buffer) returns Promise<{text: string}>
+            const data = await pdfParse(buffer)
+            cvContent = data.text || ""
             
             console.debug("[evaluate] PDF parsed successfully")
             console.debug("[evaluate] extracted text length:", cvContent.length, "characters")
@@ -340,8 +320,8 @@ export async function POST(req: Request) {
       const genAI = new GoogleGenerativeAI(GEMINI_API_KEY)
       console.debug("[evaluate] GoogleGenerativeAI instance created")
       
-      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" })
-      console.debug("[evaluate] model selected: gemini-2.0-flash-exp")
+      const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" })
+      console.debug("[evaluate] model selected: gemini-2.5-flash")
       
       // Build a simpler prompt first to test
       const testPrompt = `${systemPrompt}\n\n---CV START---\n${cvContent}\n---CV END---\n\nRespond with valid JSON only, no markdown.`
