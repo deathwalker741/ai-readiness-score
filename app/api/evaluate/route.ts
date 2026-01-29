@@ -1,5 +1,6 @@
 import { z } from "zod"
 import mammoth from "mammoth"
+import pdfParse from "pdf-parse"
 
 // Explicit Node.js runtime for Vercel compatibility with pdf-parse
 export const runtime = "nodejs"
@@ -212,13 +213,8 @@ export async function POST(req: Request) {
           console.debug("[evaluate] buffer size for PDF:", buffer.length, "bytes")
           
           try {
-            // Import pdf-parse (v1.1.1 is Node.js safe)
-            // Standard CommonJS import - pdf-parse v1.1.1 exports function directly
-            const pdfParse = (await import("pdf-parse")).default as (buffer: Buffer) => Promise<{text: string}>
-            
-            console.debug("[evaluate] pdf-parse imported successfully")
-            
-            // Parse the PDF buffer - pdfParse(buffer) returns Promise<{text: string}>
+            // Parse PDF using pdf-parse (v1.1.1 - Node.js safe, no browser APIs)
+            // Static import at top ensures Turbopack can resolve it
             const data = await pdfParse(buffer)
             cvContent = data.text || ""
             
