@@ -209,12 +209,20 @@ export async function POST(req: Request) {
           console.debug("[evaluate] buffer size for PDF:", buffer.length, "bytes")
           
           try {
-            // Use require inside try-catch to handle module loading safely
-            // This works because we have serverExternalPackages configured
-            const pdfParse = require("pdf-parse/lib/pdf.cjs")
-            console.debug("[evaluate] pdfParse loaded, type:", typeof pdfParse)
+            // Use eval('require') to trick bundler into NOT bundling pdf-parse
+            // This forces it to look in node_modules at runtime, avoiding DOMMatrix browser shim
+            const req = eval('require')
+            const pdfParser = req("pdf-parse")
+            console.debug("[evaluate] pdfParser loaded, type:", typeof pdfParser)
             
-            const data = await pdfParse(buffer)
+            // Handle the "default" export wrapper if it exists
+            const parseFunc = (pdfParser as any).default || pdfParser
+            
+            if (typeof parseFunc !== 'function') {
+              throw new Error("PDF Parser failed to load correctly.")
+            }
+            
+            const data = await parseFunc(buffer)
             cvContent = data.text || ""
             
             console.debug("[evaluate] PDF parsed successfully")
