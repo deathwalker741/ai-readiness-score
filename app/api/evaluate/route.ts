@@ -1,6 +1,5 @@
 import { z } from "zod"
 import mammoth from "mammoth"
-import * as pdfjsLib from "pdfjs-dist"
 
 // Get API key from environment variables (set in .env.local for local development)
 const GEMINI_API_KEY = process.env.AI_GATEWAY_API_KEY || process.env.GOOGLE_API_KEY || ""
@@ -205,37 +204,16 @@ export async function POST(req: Request) {
 
         // Switch logic based on file type
         if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-          // Handle PDF using pdfjs-dist
-          console.debug("[evaluate] parsing PDF file")
-          console.debug("[evaluate] buffer size for PDF:", buffer.length, "bytes")
+          // PDF support temporarily disabled due to serverless environment limitations
+          // The pdf-parse and pdfjs-dist libraries both have issues with DOMMatrix in Node.js
+          // Workaround: Use DOCX or TXT format instead
+          const errorMsg = "PDF parsing is temporarily unavailable. Please convert your PDF to DOCX or upload as TXT format instead. We're working on a better solution!"
+          console.warn("[evaluate]", errorMsg)
           
-          try {
-            // Set worker path (required for pdfjs-dist)
-            pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
-            
-            // Parse PDF
-            const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
-            console.debug("[evaluate] PDF loaded, pages:", pdf.numPages)
-            
-            let fullText = ""
-            
-            // Extract text from each page
-            for (let i = 1; i <= pdf.numPages; i++) {
-              const page = await pdf.getPage(i)
-              const textContent = await page.getTextContent()
-              const pageText = textContent.items.map((item: any) => item.str).join(" ")
-              fullText += pageText + "\n"
-            }
-            
-            cvContent = fullText.trim()
-            
-            console.debug("[evaluate] PDF parsed successfully")
-            console.debug("[evaluate] extracted text length:", cvContent.length, "characters")
-            console.debug("[evaluate] first 200 chars:", cvContent.substring(0, 200))
-          } catch (pdfError) {
-            console.error("[evaluate] PDF parsing error:", pdfError)
-            throw new Error(`Failed to parse PDF: ${pdfError}`)
-          }
+          return Response.json(
+            { error: errorMsg },
+            { status: 400 }
+          )
           
         } else if (
           file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || 

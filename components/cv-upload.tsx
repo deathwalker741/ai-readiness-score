@@ -39,10 +39,8 @@ export function CVUpload({ onSubmit, isLoading }: CVUploadProps) {
       console.debug("[cv-upload] file dropped:", droppedFile.name, "size:", droppedFile.size, "type:", droppedFile.type)
       if (
         droppedFile.type === "text/plain" ||
-        droppedFile.type === "application/pdf" ||
         droppedFile.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" ||
         droppedFile.name.endsWith(".txt") ||
-        droppedFile.name.endsWith(".pdf") ||
         droppedFile.name.endsWith(".docx")
       ) {
         setFile(droppedFile)
@@ -148,11 +146,11 @@ export function CVUpload({ onSubmit, isLoading }: CVUploadProps) {
                 Drop your CV here or click to browse
               </p>
               <p className="text-sm text-muted-foreground">
-                Supports .pdf, .docx, and .txt files
+                Supports .docx and .txt files
               </p>
               <input
                 type="file"
-                accept=".txt,.pdf,.docx,text/plain,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                accept=".txt,.docx,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 onChange={handleFileChange}
                 className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
               />
