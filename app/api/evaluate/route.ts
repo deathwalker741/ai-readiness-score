@@ -208,20 +208,29 @@ export async function POST(req: Request) {
           console.debug("[evaluate] parsing PDF file")
           console.debug("[evaluate] buffer size for PDF:", buffer.length, "bytes")
           
-          // Require pdf-parse locally (inside function) to avoid bundling issues
-          // pdf-parse v2.x exports PDFParse class
-          const pdfParseModule = require("pdf-parse")
-          const PDFParse = pdfParseModule.PDFParse || pdfParseModule.default || pdfParseModule
-          console.debug("[evaluate] PDFParse type:", typeof PDFParse, "name:", PDFParse.name)
+          // Use Node.js-compatible pdf-parse version to avoid DOMMatrix error on Vercel
+          let pdfParser
+          try {
+            // Try the specific node-compatible path first (avoids browser API dependencies)
+            pdfParser = require("pdf-parse/lib/pdf-parse.js")
+            console.debug("[evaluate] using pdf-parse/lib path")
+          } catch (e) {
+            // Fallback to standard if specific path fails
+            console.warn("[evaluate] specific pdf-parse path failed, trying default:", e)
+            pdfParser = require("pdf-parse")
+          }
           
-          // Create parser instance with buffer
-          const parser = new PDFParse({ data: buffer })
+          // Handle the default export wrapper if present
+          const parseFunc = (pdfParser as any).default || pdfParser
+          console.debug("[evaluate] parseFunc type:", typeof parseFunc)
           
-          // Extract text from all pages
-          const textResult = await parser.getText()
-          cvContent = textResult.text || ""
+          if (typeof parseFunc !== 'function') {
+            throw new Error("PDF Parser failed to load. Please try uploading a .docx or .txt file instead.")
+          }
           
-          await parser.destroy()
+          // Call the parser function with buffer
+          const data = await parseFunc(buffer)
+          cvContent = data.text || ""
           
           console.debug("[evaluate] PDF parsed successfully")
           console.debug("[evaluate] extracted text length:", cvContent.length, "characters")
