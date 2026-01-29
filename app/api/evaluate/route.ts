@@ -204,16 +204,30 @@ export async function POST(req: Request) {
 
         // Switch logic based on file type
         if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-          // PDF support temporarily disabled due to serverless environment limitations
-          // The pdf-parse and pdfjs-dist libraries both have issues with DOMMatrix in Node.js
-          // Workaround: Use DOCX or TXT format instead
-          const errorMsg = "PDF parsing is temporarily unavailable. Please convert your PDF to DOCX or upload as TXT format instead. We're working on a better solution!"
-          console.warn("[evaluate]", errorMsg)
+          // Handle PDF
+          console.debug("[evaluate] parsing PDF file")
+          console.debug("[evaluate] buffer size for PDF:", buffer.length, "bytes")
           
-          return Response.json(
-            { error: errorMsg },
-            { status: 400 }
-          )
+          try {
+            // Use require inside try-catch to handle module loading safely
+            // This works because we have serverExternalPackages configured
+            const pdfParse = require("pdf-parse/lib/pdf.cjs")
+            console.debug("[evaluate] pdfParse loaded, type:", typeof pdfParse)
+            
+            const data = await pdfParse(buffer)
+            cvContent = data.text || ""
+            
+            console.debug("[evaluate] PDF parsed successfully")
+            console.debug("[evaluate] extracted text length:", cvContent.length, "characters")
+            console.debug("[evaluate] first 200 chars:", cvContent.substring(0, 200))
+          } catch (pdfError: any) {
+            console.error("[evaluate] PDF parsing failed:", pdfError.message)
+            // Fallback: ask user to use DOCX instead
+            return Response.json(
+              { error: "PDF parsing failed. Please try uploading a .docx file instead." },
+              { status: 400 }
+            )
+          }
           
         } else if (
           file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || 
