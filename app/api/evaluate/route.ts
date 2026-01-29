@@ -209,19 +209,45 @@ export async function POST(req: Request) {
           console.debug("[evaluate] buffer size for PDF:", buffer.length, "bytes")
           
           try {
-            // Use eval('require') to trick bundler into NOT bundling pdf-parse
-            // This forces it to look in node_modules at runtime, avoiding DOMMatrix browser shim
-            const req = eval('require')
-            const pdfParser = req("pdf-parse")
-            console.debug("[evaluate] pdfParser loaded, type:", typeof pdfParser)
-            
-            // Handle the "default" export wrapper if it exists
-            const parseFunc = (pdfParser as any).default || pdfParser
+            // 1. Load the library
+            let pdfModule: any
+            try {
+              // Use standard require, relying on serverExternalPackages in next.config
+              const req = eval('require')
+              pdfModule = req("pdf-parse")
+            } catch (e) {
+              // Fallback for some environments
+              pdfModule = await import("pdf-parse")
+            }
+
+            console.debug("[evaluate] pdfModule loaded. Type:", typeof pdfModule)
+            console.debug("[evaluate] Keys:", Object.keys(pdfModule))
+
+            // 2. UNWRAP LOGIC (The Fix)
+            // Next.js sometimes wraps CJS modules in { default: ... }
+            // And sometimes double wraps { default: { default: ... } }
+            let parseFunc = pdfModule.default || pdfModule
             
             if (typeof parseFunc !== 'function') {
-              throw new Error("PDF Parser failed to load correctly.")
+              // Check for double wrapping
+              if (parseFunc.default && typeof parseFunc.default === 'function') {
+                console.debug("[evaluate] Found function in .default.default")
+                parseFunc = parseFunc.default
+              } else {
+                console.error("[evaluate] CRITICAL: PDF Parser is not a function. Structure:", parseFunc)
+                // One final desperate check: is the module ITSELF the function?
+                if (typeof pdfModule === 'function') {
+                  parseFunc = pdfModule
+                }
+              }
+            }
+
+            // 3. Final Validation
+            if (typeof parseFunc !== 'function') {
+              throw new Error(`PDF Parser failed to load. Keys found: ${Object.keys(pdfModule).join(", ")}`)
             }
             
+            // 4. Execute
             const data = await parseFunc(buffer)
             cvContent = data.text || ""
             
