@@ -1,5 +1,6 @@
 import { z } from "zod"
 import mammoth from "mammoth"
+import * as pdfjsLib from "pdfjs-dist"
 
 // Get API key from environment variables (set in .env.local for local development)
 const GEMINI_API_KEY = process.env.AI_GATEWAY_API_KEY || process.env.GOOGLE_API_KEY || ""
@@ -204,37 +205,37 @@ export async function POST(req: Request) {
 
         // Switch logic based on file type
         if (file.type === "application/pdf" || file.name.endsWith(".pdf")) {
-          // Handle PDF
+          // Handle PDF using pdfjs-dist
           console.debug("[evaluate] parsing PDF file")
           console.debug("[evaluate] buffer size for PDF:", buffer.length, "bytes")
           
-          // Use Node.js-compatible pdf-parse version to avoid DOMMatrix error on Vercel
-          let pdfParser
           try {
-            // Try the specific node-compatible path first (avoids browser API dependencies)
-            pdfParser = require("pdf-parse/lib/pdf-parse.js")
-            console.debug("[evaluate] using pdf-parse/lib path")
-          } catch (e) {
-            // Fallback to standard if specific path fails
-            console.warn("[evaluate] specific pdf-parse path failed, trying default:", e)
-            pdfParser = require("pdf-parse")
+            // Set worker path (required for pdfjs-dist)
+            pdfjsLib.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.js`
+            
+            // Parse PDF
+            const pdf = await pdfjsLib.getDocument({ data: buffer }).promise
+            console.debug("[evaluate] PDF loaded, pages:", pdf.numPages)
+            
+            let fullText = ""
+            
+            // Extract text from each page
+            for (let i = 1; i <= pdf.numPages; i++) {
+              const page = await pdf.getPage(i)
+              const textContent = await page.getTextContent()
+              const pageText = textContent.items.map((item: any) => item.str).join(" ")
+              fullText += pageText + "\n"
+            }
+            
+            cvContent = fullText.trim()
+            
+            console.debug("[evaluate] PDF parsed successfully")
+            console.debug("[evaluate] extracted text length:", cvContent.length, "characters")
+            console.debug("[evaluate] first 200 chars:", cvContent.substring(0, 200))
+          } catch (pdfError) {
+            console.error("[evaluate] PDF parsing error:", pdfError)
+            throw new Error(`Failed to parse PDF: ${pdfError}`)
           }
-          
-          // Handle the default export wrapper if present
-          const parseFunc = (pdfParser as any).default || pdfParser
-          console.debug("[evaluate] parseFunc type:", typeof parseFunc)
-          
-          if (typeof parseFunc !== 'function') {
-            throw new Error("PDF Parser failed to load. Please try uploading a .docx or .txt file instead.")
-          }
-          
-          // Call the parser function with buffer
-          const data = await parseFunc(buffer)
-          cvContent = data.text || ""
-          
-          console.debug("[evaluate] PDF parsed successfully")
-          console.debug("[evaluate] extracted text length:", cvContent.length, "characters")
-          console.debug("[evaluate] first 200 chars:", cvContent.substring(0, 200))
           
         } else if (
           file.type === "application/vnd.openxmlformats-officedocument.wordprocessingml.document" || 
